@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% from "_macros.html" import balls, verdict_pill, finding_block %}
+{% block title %}{{ meta.name }} — NLCB Lotto Analyzer{% endblock %}
+{% block body %}
+
+<h1>{{ meta.name }}</h1>
+<p class="sub">
+  {{ '{:,}'.format(n_draws) }} draws · {{ meta.picks }} number{{ '' if meta.picks == 1 else 's' }}
+  from {{ meta.pool_min }}–{{ meta.pool_max }}{% if meta.bonus_name %} plus a {{ meta.bonus_name }}{% endif %}{% if meta.ordered %} · draw order is meaningful{% endif %}.
+</p>
+
+{% if eras|length > 1 %}
+<div class="panel">
+  <h2>Ball pool changed over time</h2>
+  <p class="muted tiny lede">
+    The pool was re-sized during the archive. Frequencies are only meaningful inside a
+    single era — comparing across one makes the retired balls look ice-cold.
+  </p>
+  <div class="tabs">
+    {% for e in eras %}
+      <a class="btn {{ 'on' if loop.index0 == era_idx }}"
+         href="{{ url_for('game', code=meta.code, era=loop.index0) }}">
+        {{ e.pool_min }}–{{ e.pool_max }} · {{ e.label }} ({{ '{:,}'.format(e.draws|length) }})
+      </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="panel">
+  <div class="panel-title">
+    <h2>Ball frequency</h2>
+    <span class="muted tiny">
+      {{ '{:,}'.format(total) }} balls drawn over {{ era.label }} · expected
+      {{ expected | round(1) }} each
+    </span>
+  </div>
+
+  <div class="freq" role="img" aria-label="Ball frequency chart">
+    {% set maxc = bars | map(attribute='count') | max %}
+    {% set hotz = bars | map(attribute='z') | max %}
+    {% set coldz = bars | map(attribute='z') | min %}
+    {% for b in bars %}
+      <div class="col"
+           data-hot="{{ 1 if b.z == hotz and b.z > 0 else 0 }}"
+           data-cold="{{ 1 if b.z == coldz and b.z < 0 else 0 }}"
+           title="Number {{ b.n }} — drawn {{ b.count }} times ({{ b.pct | round(1) }}% of expected, z={{ b.z }})">
+        <div class="bar" style="height: {{ (b.count / maxc * 100) if maxc else 0 }}%"></div>
+        <div class="lbl">{{ b.n }}</div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="freqnote">
+    <span><span class="swatch" style="background:var(--gold)"></span>most drawn</span>
+    <span><span class="swatch" style="background:var(--ink-3)"></span>least drawn</span>
+    <span class="muted">z is standard deviations from the expected count. Values roughly
+      within ±3 are what fair draws produce.</span>
+  </div>
+</div>
+
+<div class="grid cols-2">
+  <div class="panel">
+    <h2>Draws per year</h2>
+    <div class="spark">
+      {% set maxy = per_year | map(attribute=1) | max %}
+      {% for y, c in per_year %}
+        <div style="height: {{ (c / maxy * 100) if maxy else 0 }}%" title="{{ y }}: {{ '{:,}'.format(c) }} draws"></div>
+      {% endfor %}
+    </div>
+    <div class="muted tiny axis">
+      <span>{{ per_year[0][0] if per_year }}</span><span>{{ per_year[-1][0] if per_year }}</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Statistical tests for this game</h2>
+    {% if findings %}
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Test</th><th>Scope</th><th class="num">p</th><th class="num">q</th><th></th></tr></thead>
+          <tbody>
+          {% for f in findings %}
+            {% if f.p_value is not none %}
+            <tr>
+              <td>{{ f.test }}</td>
+              <td class="muted tiny">{{ f.scope }}</td>
+              <td class="num">{{ f.p_value | pval }}</td>
+              <td class="num">{{ f.q_value | pval }}</td>
+              <td>{{ verdict_pill(f) }}</td>
+            </tr>
+            {% endif %}
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <details class="note">
+        <summary>Descriptive checks (no p-value)</summary>
+        <div>
+          <ul class="notelist">
+          {% for f in findings if f.p_value is none %}
+            <li><b>{{ f.test }}</b> — {{ f.detail }}</li>
+          {% else %}
+            <li class="muted">None.</li>
+          {% endfor %}
+          </ul>
+        </div>
+      </details>
+    {% else %}
+      <p class="muted tiny">No analysis run yet. Run <code>python analyze.py</code>.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% if jackpot %}
+<div class="panel">
+  <h2>Jackpot over time</h2>
+  <p class="muted tiny lede">
+    A rolling jackpot only grows, so every fall marks a draw that was won.
+    Gold dots are draws with a <em>published</em> winner count above zero —
+    where they line up with the falls, the inference is confirmed.
+  </p>
+  <svg viewBox="0 0 {{ jackpot.w }} {{ jackpot.h }}" preserveAspectRatio="none"
+       style="width:100%;height:200px;display:block" role="img"
+       aria-label="Jackpot value over time">
+    <polyline fill="none" stroke="var(--accent)" stroke-width="1.4"
+              vector-effect="non-scaling-stroke" points="{{ jackpot.points }}" />
+    {% for w in jackpot.wins %}
+      <circle cx="{{ w.x }}" cy="{{ w.y }}" r="3" fill="var(--gold)">
+        <title>{{ w.date }} — {{ w.n }} jackpot winner{{ '' if w.n == 1 else 's' }} at {{ w.amount | money }}</title>
+      </circle>
+    {% endfor %}
+  </svg>
+  <div class="muted tiny axis">
+    <span>{{ jackpot.first }}</span>
+    <span>peak {{ jackpot.top | compactmoney }} ·
+      {{ '{:,}'.format(jackpot.won) }} published wins over
+      {{ '{:,}'.format(jackpot.n) }} draws carrying a jackpot figure{% if jackpot.thinned %}
+      (markers thinned for legibility){% endif %}</span>
+    <span>{{ jackpot.last }}</span>
+  </div>
+</div>
+{% endif %}
+
+<div class="panel tight">
+  <div class="panel-head">
+    <h2>Draws</h2>
+    <span class="muted tiny">{{ '{:,}'.format(n_rows) }} matching</span>
+    <form class="controls" method="get">
+      {% if era_idx is not none %}<input type="hidden" name="era" value="{{ era_idx }}">{% endif %}
+      <input type="search" name="q" value="{{ q }}" placeholder="draw #, date or number…">
+      <button class="btn" type="submit">Search</button>
+      {% if q %}<a class="btn" href="{{ url_for('game', code=meta.code) }}">Clear</a>{% endif %}
+    </form>
+  </div>
+  <div class="tablewrap tall">
+    <table>
+      <thead>
+        <tr>
+          <th class="num">Draw</th><th>Date</th><th>Time</th><th>Numbers</th>
+          {% if meta.bonus_name %}<th>{{ meta.bonus_name }}</th>{% endif %}
+          <th>Mult</th><th class="num">Jackpot</th><th class="num">Wins</th><th>Source</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for r in rows %}
+        <tr>
+          <td class="num">{{ r.draw_number }}</td>
+          <td class="mono">{{ r.draw_date or '—' }}</td>
+          <td class="mono">{{ r.draw_time or r.draw_period or '—' }}</td>
+          <td>{{ balls(r.numbers) }}</td>
+          {% if meta.bonus_name %}
+            <td>{% if r.bonus_number is not none %}<span class="b bonus">{{ r.bonus_number }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+          {% endif %}
+          <td class="mono">{{ r.multiplier or '—' }}</td>
+          <td class="num">{{ r.jackpot_cents | compactmoney }}</td>
+          <td class="num">{{ r.wins if r.wins is not none else '—' }}</td>
+          <td class="muted tiny">{{ r.source }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="9" class="empty">Nothing matches that search.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% set pages = (n_rows // per) + (1 if n_rows % per else 0) %}
+  {% if pages > 1 %}
+  <div class="pager">
+    <a class="btn" aria-disabled="{{ 'true' if page <= 1 else 'false' }}"
+       href="{{ url_for('game', code=meta.code, page=page-1, q=q or None, era=era_idx) }}">← Prev</a>
+    <span>Page {{ page }} of {{ '{:,}'.format(pages) }}</span>
+    <a class="btn" aria-disabled="{{ 'true' if page >= pages else 'false' }}"
+       href="{{ url_for('game', code=meta.code, page=page+1, q=q or None, era=era_idx) }}">Next →</a>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

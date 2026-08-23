@@ -1,0 +1,16 @@
+# Data products: rebuildable, and the DB is ~270 MB
+data/lotto.db
+data/lotto.db-wal
+data/lotto.db-shm
+data/cache/
+
+# Runtime artefacts
+logs_*.log
+logs_*.err
+*.pid
+reports/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.DS_Store

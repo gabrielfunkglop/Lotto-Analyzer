@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% from "_macros.html" import balls, verdict_pill, finding_block %}
+{% block title %}Data quality — NLCB Lotto Analyzer{% endblock %}
+{% block body %}
+
+<h1>Data quality</h1>
+<p class="sub">
+  Two sources are kept side by side and never merged on write, so where they disagree
+  the disagreement is visible rather than hidden. Everything below is about the
+  <em>records</em>, not about whether the draws were fair.
+</p>
+
+{% if quality %}
+<div class="panel">
+  <h2>Integrity checks</h2>
+  {% for f in quality %}{{ finding_block(f) }}{% endfor %}
+</div>
+{% endif %}
+
+<div class="panel tight">
+  <div class="panel-head">
+    <h2>Where the two sources disagree</h2>
+    <span class="muted tiny" data-filter-count="conflicts">{{ conflicts|length }} shown</span>
+    <div class="controls">
+      <input type="search" data-filter="conflicts" placeholder="filter by game or draw…">
+    </div>
+  </div>
+  {% if conflicts %}
+    <p class="muted tiny panel-note">
+      Both sources are kept, so these are visible rather than silently resolved.
+      {% for g, n in overlap.items() %}{{ g }}: {{ '{:,}'.format(n) }} overlapping{{ ', ' if not loop.last }}{% endfor %}.
+      Note the pattern in Cash Pot and Win For Life below — the official records repeat
+      the same number sets across different draws while the mirror, which takes results
+      from the televised draw, has distinct numbers for each. That is what the
+      <code>repeat_sets</code> finding on the Fairness page is detecting.
+    </p>
+    <div class="tablewrap tall">
+      <table id="conflicts">
+        <thead><tr><th>Game</th><th class="num">Draw</th><th>Date</th>
+                   <th>nlcbgames (official)</th><th>nlcbplaywhelotto (mirror)</th></tr></thead>
+        <tbody>
+        {% for c in conflicts %}
+          <tr>
+            <td><a href="{{ url_for('game', code=c.game) }}">{{ c.game }}</a></td>
+            <td class="num">{{ c.draw_number }}</td>
+            <td class="mono">{{ c.draw_date }}</td>
+            <td>{{ balls(c.official) }}</td>
+            <td>{{ balls(c.mirror) }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty">The two sources agree on every draw they both carry.</div>
+  {% endif %}
+</div>
+
+<div class="panel tight">
+  <div class="panel-head"><h2>Coverage by source</h2></div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Game</th><th>Source</th><th class="num">Rows</th><th>First</th><th>Last</th>
+                 <th class="num">With jackpot</th><th class="num">With win count</th></tr></thead>
+      <tbody>
+      {% for s in sources %}
+        <tr>
+          <td><a href="{{ url_for('game', code=s.game) }}">{{ s.game }}</a></td>
+          <td class="muted tiny">{{ s.source }}</td>
+          <td class="num">{{ '{:,}'.format(s.n) }}</td>
+          <td class="mono">{{ s.d0 or '—' }}</td>
+          <td class="mono">{{ s.d1 or '—' }}</td>
+          <td class="num">{{ '{:,}'.format(s.jp or 0) }}</td>
+          <td class="num">{{ '{:,}'.format(s.wn or 0) }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="grid cols-2">
+  <div class="panel tight">
+    <div class="panel-head"><h2>Missing draws</h2>
+      <span class="muted tiny">stored as all-zero by the mirror</span></div>
+    {% if placeholders %}
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Game</th><th>Source</th><th class="num">Rows</th></tr></thead>
+          <tbody>
+          {% for p in placeholders %}
+            <tr><td>{{ p.game }}</td><td class="muted tiny">{{ p.source }}</td>
+                <td class="num">{{ p.n }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="muted tiny panel-note">
+        The mirror writes <code>0-0-0-0-0</code> for draws it never obtained. These are
+        excluded from every statistical test — treating them as draws of zeros would
+        wreck the frequency counts.
+      </p>
+    {% else %}
+      <div class="empty">None.</div>
+    {% endif %}
+  </div>
+
+  <div class="panel tight">
+    <div class="panel-head"><h2>Ingest log</h2></div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Source</th><th>Status</th><th class="num">Count</th><th>Last</th></tr></thead>
+        <tbody>
+        {% for i in ingest %}
+          <tr>
+            <td class="muted tiny">{{ i.source }}</td>
+            <td>{% if i.status == 'ok' %}<span class="pill ok">ok</span>
+                {% else %}<span class="pill bad">{{ i.status }}</span>{% endif %}</td>
+            <td class="num">{{ '{:,}'.format(i.n) }}</td>
+            <td class="mono tiny">{{ i.last }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% if errors %}
+<div class="panel tight">
+  <div class="panel-head"><h2>Recent ingest errors</h2>
+    <span class="muted tiny">mostly the mirror rate-limiting the crawler</span></div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>When</th><th>Source</th><th>Target</th><th>Note</th></tr></thead>
+      <tbody>
+      {% for e in errors %}
+        <tr><td class="mono tiny">{{ e.ts }}</td><td class="muted tiny">{{ e.source }}</td>
+            <td class="mono tiny">{{ e.target }}</td>
+            <td class="muted tiny">{{ (e.note or '')[:160] }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

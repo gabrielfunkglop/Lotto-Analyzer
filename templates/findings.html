@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% from "_macros.html" import balls, verdict_pill, finding_block %}
+{% block title %}Fairness — NLCB Lotto Analyzer{% endblock %}
+{% block body %}
+
+{% set tested = findings | selectattr('p_value', 'ne', None) | list %}
+{% set sig = tested | selectattr('q_value', 'ne', None) | selectattr('q_value', 'lt', 0.05) | list %}
+{% set desc = findings | selectattr('p_value', 'eq', None) | list %}
+
+<h1>Fairness</h1>
+<p class="sub">
+  {{ tested|length }} hypothesis tests from the run of {{ run_ts or '—' }}.
+  Running this many tests guarantees some small p-values by chance, so each one is
+  carried through a Benjamini–Hochberg false-discovery-rate correction and judged on
+  its <b>q</b>-value instead.
+</p>
+
+<div class="verdict {{ 'clean' if not sig else 'flag' }}">
+  <span class="dot"></span>
+  <div>
+    {% if not sig %}
+      <h2>Nothing survives correction</h2>
+      <p>Every test is consistent with fair draws once the false-discovery rate is
+         controlled. That is the expected result for a properly run lottery.</p>
+    {% else %}
+      <h2>{{ sig|length }} test{{ '' if sig|length == 1 else 's' }} flagged at FDR 5%</h2>
+      <p>A flag means "this does not match the idealised fair model". That can equally be
+         a data-quality artefact, a rule change, or a machine or ball-set change — read the
+         detail column before drawing any conclusion.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% if sig %}
+<div class="panel">
+  <h2>Flagged</h2>
+  {% for f in sig %}{{ finding_block(f) }}{% endfor %}
+</div>
+{% endif %}
+
+<div class="panel tight">
+  <div class="panel-head">
+    <h2>All tests</h2>
+    <span class="muted tiny" data-filter-count="allTests">{{ tested|length }} shown</span>
+    <div class="controls">
+      <input type="search" data-filter="allTests" placeholder="filter by game, test or scope…">
+    </div>
+  </div>
+  <div class="tablewrap tall">
+    <table id="allTests">
+      <thead>
+        <tr><th>Game</th><th>Test</th><th>Scope</th><th class="num">n</th>
+            <th class="num">statistic</th><th class="num">p</th><th class="num">q</th>
+            <th>Verdict</th><th>Detail</th></tr>
+      </thead>
+      <tbody>
+      {% for f in tested %}
+        <tr>
+          <td>{% if f.game not in ('all',) %}<a href="{{ url_for('game', code=f.game) }}">{{ f.game }}</a>{% else %}{{ f.game }}{% endif %}</td>
+          <td>{{ f.test }}</td>
+          <td class="muted tiny">{{ f.scope }}</td>
+          <td class="num">{{ '{:,}'.format(f.n or 0) }}</td>
+          <td class="num">{{ '%.3f'|format(f.statistic) if f.statistic is not none else '—' }}</td>
+          <td class="num">{{ f.p_value | pval }}</td>
+          <td class="num">{{ f.q_value | pval }}</td>
+          <td>{{ verdict_pill(f) }}</td>
+          <td class="muted tiny wrap">{{ f.detail }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="9" class="empty">No analysis run yet — run <code>python analyze.py</code>.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if desc %}
+<div class="panel tight">
+  <div class="panel-head"><h2>Descriptive checks</h2>
+    <span class="muted tiny">structural facts, not hypothesis tests</span></div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Game</th><th>Check</th><th>Scope</th><th>Detail</th></tr></thead>
+      <tbody>
+      {% for f in desc %}
+        <tr>
+          <td>{{ f.game }}</td><td>{{ f.test }}</td>
+          <td class="muted tiny">{{ f.scope }}</td>
+          <td class="muted tiny">{{ f.detail }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="panel">
+  <h2>How these tests work</h2>
+  <div class="grid cols-2" style="gap:14px">
+    <div>
+      <h3>Correct nulls, not textbook ones</h3>
+      <p class="muted tiny">Games that draw several numbers at once do not produce
+        independent counts — the balls in one draw are mutually exclusive. Frequency
+        tests therefore compare against a Monte-Carlo null that simulates real
+        without-replacement draws. Carry-over tests use a shuffled-order null, because
+        overlaps at a given lag share draws with their neighbours.</p>
+    </div>
+    <div>
+      <h3>Pools calibrated from the data</h3>
+      <p class="muted tiny">Number pools are read off the archive rather than assumed,
+        and the history is split wherever the pool was re-sized. Assuming a wider pool
+        than the game actually used invents balls that can never be drawn and produces
+        a spectacular but meaningless result.</p>
+    </div>
+    <div>
+      <h3>Multiple testing</h3>
+      <p class="muted tiny">At a 5% threshold roughly {{ (0.05 * (tested|length)) | round | int }}
+        of these {{ tested|length }} tests would look significant on perfectly fair data.
+        The q column controls the expected proportion of false discoveries among the
+        flagged results.</p>
+    </div>
+    <div>
+      <h3>What a flag is not</h3>
+      <p class="muted tiny">It is not evidence of wrongdoing. Transcription errors on the
+        source sites, rule changes and equipment changes all produce departures from the
+        idealised model, and in this archive they are by far the most common cause.</p>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

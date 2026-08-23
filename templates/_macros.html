@@ -1,0 +1,35 @@
+{# Shared fragments. Import with:
+     {% from "_macros.html" import balls, verdict_pill, finding_block %}
+#}
+
+{% macro balls(numbers, bonus=none) -%}
+<div class="balls">
+  {%- for n in numbers %}<span class="b">{{ n }}</span>{% endfor -%}
+  {%- if bonus is not none %}<span class="b bonus" title="bonus ball">{{ bonus }}</span>{% endif -%}
+</div>
+{%- endmacro %}
+
+{# One consistent verdict pill everywhere a test result is shown. #}
+{% macro verdict_pill(f) -%}
+  {%- if f.q_value is not none and f.q_value < 0.05 -%}
+    <span class="pill bad">flagged</span>
+  {%- elif f.p_value is not none and f.p_value < 0.05 -%}
+    <span class="pill warn" title="significant on its own, but not after correcting for the number of tests run">p&lt;.05, q ok</span>
+  {%- elif f.p_value is not none -%}
+    <span class="pill ok">fair</span>
+  {%- else -%}
+    <span class="pill">note</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro finding_block(f) -%}
+<div class="finding">
+  <div class="row1">
+    {{ verdict_pill(f) }}
+    {% if f.q_value is not none %}<span class="muted tiny">q = {{ f.q_value | pval }}</span>{% endif %}
+    <b>{{ f.game }} · {{ f.test }}</b>
+    <span class="muted tiny">{{ f.scope }}{% if f.n %} · n = {{ '{:,}'.format(f.n) }}{% endif %}</span>
+  </div>
+  <div class="muted tiny detail">{{ f.detail }}</div>
+</div>
+{%- endmacro %}

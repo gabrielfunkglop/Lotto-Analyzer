@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}Winners map — NLCB Lotto Analyzer{% endblock %}
+{% block body %}
+
+<h1>Where the winning tickets were sold</h1>
+<p class="sub">
+  {{ winners|length }} winner announcements published by NLCB, covering
+  {{ total_outlets }} named outlets. Markers sit at the centre of the town or district
+  named in the address — the source gives street addresses, never coordinates, so this
+  shows the area a ticket was sold in, not the exact shop.
+</p>
+
+<div class="maplayout">
+  <div>
+    <div class="mapbox">
+      <svg viewBox="0 0 {{ tmap.w }} {{ tmap.h }}" id="ttmap" role="img"
+           aria-label="Map of Trinidad and Tobago showing where winning tickets were sold">
+        {% if tmap.inset_box %}
+          <rect class="inset-frame" x="{{ tmap.inset_box[0] }}" y="{{ tmap.inset_box[1] }}"
+                width="{{ tmap.inset_box[2] }}" height="{{ tmap.inset_box[3] }}" rx="6"/>
+          <text class="inset-label" x="{{ tmap.inset_box[0] + 8 }}" y="{{ tmap.inset_box[1] + 14 }}">TOBAGO</text>
+        {% endif %}
+        <text class="inset-label" x="20" y="20">TRINIDAD</text>
+        {% for p in tmap.layers %}
+          <path class="land" d="{{ p }}"/>
+        {% endfor %}
+        {% for m in tmap.points %}
+          <circle class="marker" cx="{{ m.x }}" cy="{{ m.y }}" r="{{ m.r }}"
+                  data-place="{{ m.place }}"
+                  data-label="{{ m.label }}"
+                  data-count="{{ m.count }}"
+                  data-amount="{{ m.amount | money }}"
+                  data-outlets="{{ m.outlets | join(' · ') }}"
+                  tabindex="0" role="button"
+                  aria-label="{{ m.label }}, {{ m.count }} winning tickets"></circle>
+        {% endfor %}
+      </svg>
+    </div>
+    <p class="muted tiny maplegend">
+      Circle size is the number of announced winning tickets sold in that area.
+      Click a marker to filter the list.
+      {% if unmapped %}
+        {{ unmapped }} outlet{{ '' if unmapped == 1 else 's' }} could not be placed —
+        the card named only a business, with no town or address.
+      {% endif %}
+    </p>
+  </div>
+
+  <div class="panel tight">
+    <div class="panel-head"><h2>Areas</h2>
+      <span class="muted tiny">{{ markers|length }} places</span></div>
+    <div class="placelist" id="placelist">
+      <button type="button" data-place="" class="sel">
+        <span><b>All areas</b></span><span class="c">{{ winners|length }}</span>
+      </button>
+      {% for m in markers %}
+        <button type="button" data-place="{{ m.place }}">
+          <span>{{ m.label }}<br><span class="c">{{ m.amount | compactmoney }}</span></span>
+          <span class="c">{{ m.count }}</span>
+        </button>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="panel tight">
+  <div class="panel-head">
+    <h2>Announcements</h2>
+    <span class="muted tiny" id="wcount">{{ winners|length }} shown</span>
+    <div class="controls">
+      <select id="gameFilter">
+        <option value="">All games</option>
+        {% for g in winners | map(attribute='game') | unique | sort %}
+          <option value="{{ g }}">{{ g }}</option>
+        {% endfor %}
+      </select>
+      <input type="search" id="wsearch" placeholder="outlet, area or amount…">
+    </div>
+  </div>
+  <div id="winnerlist">
+    {% for w in winners %}
+      <div class="winner-card"
+           data-game="{{ w.game }}"
+           data-places="{{ w.outlets | map(attribute='place') | select | join('|') }}"
+           data-text="{{ (w.outlets | map(attribute='outlet') | join(' ') ~ ' ' ~ (w.outlets | map(attribute='area') | select | join(' ')) ~ ' ' ~ w.game) | lower }}">
+        <div class="row1">
+          <span class="amt">{{ w.amount_cents | money }}</span>
+          <span class="pill">{{ w.game }}</span>
+          {% if w.draw_number %}<span class="muted tiny">draw #{{ w.draw_number }}</span>{% endif %}
+          <span class="muted tiny">
+            {{ w.draw_date or w.draw_date_raw or 'date not published' }}
+            {%- if w.draw_time %} · {{ w.draw_time }}{% endif %}
+            {%- if w.players %} · {{ w.players }} winner{{ '' if w.players == 1 else 's' }}{% endif %}
+          </span>
+          {% if w.numbers %}
+            <span class="balls push-right">
+              {% for n in w.numbers %}<span class="b">{{ n }}</span>{% endfor %}
+            </span>
+          {% endif %}
+        </div>
+        <div class="where">
+          {% for o in w.outlets %}
+            <div><em>{{ o.outlet }}</em>{% if o.address %} — {{ o.address }}{% elif o.area %} — {{ o.area }}{% endif %}
+              {%- if not o.place %} <span class="pill warn">not mapped</span>{% endif %}</div>
+          {% else %}
+            <div class="muted">No outlet named.</div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+  <div class="empty" id="noresults" hidden>Nothing matches those filters.</div>
+</div>
+
+<div id="tip" role="tooltip"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var tip = document.getElementById("tip");
+  var svg = document.getElementById("ttmap");
+  var list = document.getElementById("winnerlist");
+  var cards = Array.prototype.slice.call(list.querySelectorAll(".winner-card"));
+  var placeButtons = Array.prototype.slice.call(document.querySelectorAll("#placelist button"));
+  var markers = Array.prototype.slice.call(svg.querySelectorAll(".marker"));
+  var gameSel = document.getElementById("gameFilter");
+  var search = document.getElementById("wsearch");
+  var count = document.getElementById("wcount");
+  var none = document.getElementById("noresults");
+  var place = "";
+
+  function showTip(el, ev) {
+    tip.innerHTML = "<b>" + el.dataset.label + "</b>" +
+      el.dataset.count + " winning ticket" + (el.dataset.count === "1" ? "" : "s") +
+      " · " + el.dataset.amount +
+      "<div class='o'>" + el.dataset.outlets + "</div>";
+    tip.style.display = "block";
+    var pad = 14;
+    var x = ev.clientX + pad, y = ev.clientY + pad;
+    var r = tip.getBoundingClientRect();
+    if (x + r.width > window.innerWidth - 8) x = ev.clientX - r.width - pad;
+    if (y + r.height > window.innerHeight - 8) y = ev.clientY - r.height - pad;
+    tip.style.left = x + "px";
+    tip.style.top = y + "px";
+  }
+  function hideTip() { tip.style.display = "none"; }
+
+  markers.forEach(function (m) {
+    m.addEventListener("mousemove", function (ev) { showTip(m, ev); });
+    m.addEventListener("mouseleave", hideTip);
+    m.addEventListener("click", function () { setPlace(m.dataset.place); });
+    m.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); setPlace(m.dataset.place); }
+    });
+  });
+
+  placeButtons.forEach(function (b) {
+    b.addEventListener("click", function () { setPlace(b.dataset.place); });
+  });
+
+  function setPlace(p) {
+    place = (place === p) ? "" : p;   // clicking the active place clears it
+    markers.forEach(function (m) { m.classList.toggle("sel", !!place && m.dataset.place === place); });
+    placeButtons.forEach(function (b) { b.classList.toggle("sel", b.dataset.place === place); });
+    hideTip();
+    apply();
+  }
+
+  function apply() {
+    var g = gameSel.value;
+    var q = search.value.trim().toLowerCase();
+    var shown = 0;
+    cards.forEach(function (c) {
+      var okPlace = !place || (c.dataset.places || "").split("|").indexOf(place) !== -1;
+      var okGame = !g || c.dataset.game === g;
+      var okText = !q || c.dataset.text.indexOf(q) !== -1 ||
+                   c.querySelector(".amt").textContent.toLowerCase().indexOf(q) !== -1;
+      var ok = okPlace && okGame && okText;
+      c.hidden = !ok;
+      if (ok) shown++;
+    });
+    count.textContent = shown + " shown";
+    none.hidden = shown !== 0;
+  }
+
+  gameSel.addEventListener("change", apply);
+  search.addEventListener("input", apply);
+  window.addEventListener("scroll", hideTip, { passive: true });
+})();
+</script>
+{% endblock %}

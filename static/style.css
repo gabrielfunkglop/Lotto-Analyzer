@@ -1,0 +1,480 @@
+/* ==========================================================================
+   NLCB Lotto Analyzer
+
+   Layout rules worth knowing before editing:
+
+   - Table headers stick to their own scroll container (.tablewrap), never to
+     the viewport. Sticking them to the viewport needs the site header's exact
+     height as a magic offset, and any mismatch leaves a gap that table rows
+     scroll through.
+   - Every colour is a token on :root. The dark palette is declared twice: once
+     under prefers-color-scheme for viewers who never touched the toggle, and
+     once under [data-theme="dark"] so the toggle wins in both directions.
+     Never give a colour its only definition inside a media query.
+   ========================================================================== */
+
+:root {
+  color-scheme: light dark;
+
+  --bg:        #f6f7f9;
+  --panel:     #ffffff;
+  --panel-2:   #f4f6f9;
+  --ink:       #14181f;
+  --ink-2:     #55606f;
+  --ink-3:     #646e7d;
+  --line:      #e2e6ec;
+  --line-2:    #eef1f5;
+  --accent:    #b4232a;
+  --accent-2:  #d94a52;
+  --gold:      #a8730c;
+  --ok:        #12684f;
+  --warn:      #955900;
+  --bad:       #b4232a;
+  --on-accent: #ffffff;
+
+  --shadow: 0 1px 2px rgba(16,22,32,.06), 0 8px 24px rgba(16,22,32,.05);
+  --radius: 12px;
+  --header-h: 57px;
+
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Inter, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:       #0e1116;
+    --panel:    #161b22;
+    --panel-2:  #1c222b;
+    --ink:      #e6eaf0;
+    --ink-2:    #a2adbc;
+    --ink-3:    #929cab;
+    --on-accent: #12161c;
+    --line:     #2a3240;
+    --line-2:   #1f2630;
+    --accent:   #ff6b6b;
+    --accent-2: #ff9090;
+    --gold:     #e0a53a;
+    --ok:       #45c39d;
+    --warn:     #e0a53a;
+    --bad:      #ff6b6b;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg:       #0e1116;
+  --panel:    #161b22;
+  --panel-2:  #1c222b;
+  --ink:      #e6eaf0;
+  --ink-2:    #a2adbc;
+  --ink-3:    #929cab;
+  --on-accent: #12161c;
+  --line:     #2a3240;
+  --line-2:   #1f2630;
+  --accent:   #ff6b6b;
+  --accent-2: #ff9090;
+  --gold:     #e0a53a;
+  --ok:       #45c39d;
+  --warn:     #e0a53a;
+  --bad:      #ff6b6b;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;           /* nothing should ever scroll the page sideways */
+}
+
+a { color: inherit; }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ==========================================================================
+   Header
+   ========================================================================== */
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-height: var(--header-h);
+  padding: 9px 22px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  display: flex; align-items: center; gap: 9px;
+  text-decoration: none; font-size: 15px; letter-spacing: -.01em;
+  white-space: nowrap;
+}
+.brand b { font-weight: 700; }
+.brand .ball { font-size: 19px; line-height: 1; }
+
+.top nav {
+  display: flex; align-items: center; gap: 2px;
+  margin-left: auto; flex-wrap: wrap;
+}
+.top nav > a,
+.dropdown > button {
+  font: inherit; font-size: 14px; color: var(--ink-2);
+  text-decoration: none; padding: 7px 11px; border-radius: 8px;
+  background: none; border: 0; cursor: pointer; white-space: nowrap;
+}
+.top nav > a:hover, .dropdown > button:hover { background: var(--line-2); color: var(--ink); }
+.top nav > a.on, .dropdown.on > button { background: var(--line-2); color: var(--ink); font-weight: 600; }
+
+.theme {
+  font: inherit; font-size: 15px; line-height: 1; cursor: pointer;
+  background: none; border: 1px solid var(--line); color: var(--ink-2);
+  border-radius: 8px; padding: 7px 10px; flex: none;
+}
+.theme:hover { color: var(--ink); border-color: var(--ink-3); }
+
+.dropdown { position: relative; }
+.dropdown .menu {
+  position: absolute; right: 0; top: calc(100% + 6px);
+  min-width: 250px; max-height: 70vh; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: var(--shadow); padding: 6px; display: none; z-index: 60;
+}
+.dropdown.open .menu { display: block; }
+.dropdown .menu a {
+  display: flex; justify-content: space-between; gap: 16px;
+  padding: 7px 10px; border-radius: 7px; text-decoration: none; font-size: 14px;
+}
+.dropdown .menu a span {
+  color: var(--ink-3); font-variant-numeric: tabular-nums; font-size: 12.5px;
+}
+.dropdown .menu a:hover { background: var(--line-2); }
+
+main { max-width: 1220px; margin: 0 auto; padding: 26px 22px 56px; }
+footer {
+  max-width: 1220px; margin: 0 auto; padding: 0 22px 40px;
+  color: var(--ink-3); font-size: 12.5px;
+}
+footer a { color: var(--ink-2); }
+
+/* ==========================================================================
+   Typography
+   ========================================================================== */
+h1 { font-size: 25px; letter-spacing: -.02em; margin: 0 0 6px; font-weight: 700; }
+h2 { font-size: 17px; letter-spacing: -.01em; margin: 0 0 14px; font-weight: 650; }
+h3 { font-size: 14px; margin: 0 0 8px; font-weight: 650; }
+.sub { color: var(--ink-2); margin: 0 0 24px; font-size: 14px; max-width: 76ch; }
+.muted { color: var(--ink-2); }
+.tiny { font-size: 12.5px; }
+
+code {
+  font-family: var(--mono); font-size: 12.5px;
+  background: var(--line-2); padding: 1px 5px; border-radius: 5px;
+}
+
+/* ==========================================================================
+   Panels and grids
+   ========================================================================== */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px 20px;
+  margin-bottom: 20px;
+}
+/* `tight` panels hold a full-bleed table, so padding moves to .panel-head */
+.panel.tight { padding: 0; overflow: hidden; }
+
+.panel-head {
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  padding: 16px 20px 12px;
+}
+.panel-head h2 { margin: 0; }
+
+.grid { display: grid; gap: 20px; }
+.cols-2 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+.stat {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow);
+}
+.stat .k {
+  color: var(--ink-3); font-size: 11.5px; text-transform: uppercase;
+  letter-spacing: .07em; font-weight: 600;
+}
+.stat .v {
+  font-size: 25px; font-weight: 700; letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums; margin-top: 2px;
+}
+.stat .n { color: var(--ink-2); font-size: 12.5px; }
+
+/* ==========================================================================
+   Verdict banner
+   ========================================================================== */
+.verdict {
+  display: flex; gap: 16px; align-items: flex-start;
+  border-radius: var(--radius); padding: 18px 20px; margin-bottom: 22px;
+  border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow);
+}
+.verdict .dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 6px; flex: none; }
+.verdict.clean .dot { background: var(--ok);   box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 22%, transparent); }
+.verdict.flag  .dot { background: var(--warn); box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 22%, transparent); }
+.verdict h2 { margin: 0 0 4px; }
+.verdict p { margin: 0; color: var(--ink-2); font-size: 14px; max-width: 84ch; }
+
+/* ==========================================================================
+   Tables
+
+   .tablewrap is the scroll container. Headers stick to IT, not the viewport,
+   so there is no magic offset to keep in sync with the site header.
+   Add .tall to cap the height and make the sticky header actually engage.
+   ========================================================================== */
+.tablewrap { overflow: auto; }
+.tablewrap.tall { max-height: 70vh; }
+
+table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13.5px; }
+
+th, td {
+  padding: 9px 12px; text-align: left; vertical-align: top;
+  border-bottom: 1px solid var(--line-2);
+}
+th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--panel-2);
+  font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--ink-3); font-weight: 650; white-space: nowrap;
+  border-bottom: 1px solid var(--line);
+}
+tbody tr:hover td { background: var(--line-2); }
+tbody tr:last-child td { border-bottom: 0; }
+
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); }
+td.mono { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
+td.wrap { min-width: 320px; }
+
+.pager {
+  display: flex; gap: 8px; align-items: center; justify-content: flex-end;
+  padding: 12px 20px; color: var(--ink-2); font-size: 13px;
+  border-top: 1px solid var(--line-2);
+}
+
+/* ==========================================================================
+   Balls and pills
+   ========================================================================== */
+.balls { display: flex; gap: 5px; flex-wrap: wrap; }
+.b {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 26px; height: 26px; padding: 0 6px; border-radius: 50px;
+  background: var(--line-2); border: 1px solid var(--line);
+  font-family: var(--mono); font-size: 12.5px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.b.bonus {
+  background: color-mix(in srgb, var(--gold) 18%, var(--panel));
+  border-color: color-mix(in srgb, var(--gold) 55%, var(--line));
+}
+
+.pill {
+  display: inline-block; padding: 2px 9px; border-radius: 50px;
+  font-size: 11.5px; font-weight: 600;
+  border: 1px solid var(--line); background: var(--line-2); color: var(--ink-2);
+  white-space: nowrap;
+}
+.pill.ok   { color: var(--ok);   border-color: color-mix(in srgb, var(--ok) 42%, var(--line));   background: color-mix(in srgb, var(--ok) 12%, transparent); }
+.pill.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 42%, var(--line)); background: color-mix(in srgb, var(--warn) 12%, transparent); }
+.pill.bad  { color: var(--bad);  border-color: color-mix(in srgb, var(--bad) 42%, var(--line));  background: color-mix(in srgb, var(--bad) 12%, transparent); }
+
+/* ==========================================================================
+   Frequency chart
+   ========================================================================== */
+.freq {
+  display: flex; align-items: flex-end; gap: 3px;
+  height: 210px; margin: 6px 0 0;
+  overflow-x: auto; overflow-y: hidden;
+}
+.freq .col {
+  flex: 1 1 0; min-width: 14px;
+  display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
+  height: 100%;
+}
+.freq .bar {
+  width: 100%; border-radius: 3px 3px 0 0;
+  background: var(--accent); opacity: .8; transition: opacity .12s;
+  min-height: 1px;
+}
+.freq .col:hover .bar { opacity: 1; }
+.freq .lbl { font-size: 10px; color: var(--ink-3); font-family: var(--mono); margin-top: 4px; }
+.freq .col[data-hot="1"]  .bar { background: var(--gold); }
+.freq .col[data-cold="1"] .bar { background: var(--ink-3); }
+
+.freqnote {
+  display: flex; gap: 16px; flex-wrap: wrap;
+  margin-top: 10px; font-size: 12.5px; color: var(--ink-2);
+}
+.swatch {
+  display: inline-block; width: 10px; height: 10px; border-radius: 3px;
+  vertical-align: -1px; margin-right: 5px;
+}
+
+.spark { display: flex; align-items: flex-end; gap: 2px; height: 46px; }
+.spark div {
+  flex: 1; background: var(--accent); opacity: .5;
+  border-radius: 2px 2px 0 0; min-height: 1px;
+}
+.spark div:hover { opacity: 1; }
+
+/* ==========================================================================
+   Controls
+   ========================================================================== */
+.controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-left: auto; }
+
+input[type=search], input[type=text], select {
+  font: inherit; font-size: 13.5px; padding: 6px 10px;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--panel-2); color: var(--ink);
+  max-width: 100%;
+}
+
+.btn {
+  font: inherit; font-size: 13.5px; padding: 6px 12px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--panel-2); color: var(--ink); text-decoration: none;
+  display: inline-block; white-space: nowrap;
+}
+.btn:hover { background: var(--line-2); border-color: var(--ink-3); }
+.btn.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.on:hover { background: var(--accent); }
+.btn[aria-disabled="true"] { opacity: .4; pointer-events: none; }
+
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* ==========================================================================
+   Winners map
+   ========================================================================== */
+.maplayout {
+  display: grid; grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 20px; align-items: start;
+}
+.mapbox {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow); padding: 8px;
+}
+.mapbox svg { display: block; width: 100%; height: auto; }
+
+.land {
+  fill: color-mix(in srgb, var(--ok) 15%, var(--panel-2));
+  stroke: color-mix(in srgb, var(--ink-3) 60%, transparent);
+  stroke-width: .6;
+}
+.marker {
+  fill: color-mix(in srgb, var(--accent) 68%, transparent);
+  stroke: var(--panel); stroke-width: 1.2; cursor: pointer;
+  transition: fill .12s;
+}
+.marker:hover, .marker.sel { fill: var(--accent); }
+.marker:focus-visible { outline: 2px solid var(--accent); }
+.inset-frame { fill: none; stroke: var(--line); stroke-width: .8; stroke-dasharray: 2 2; }
+.inset-label { font-size: 8px; fill: var(--ink-3); font-family: var(--sans); letter-spacing: .08em; }
+
+#tip {
+  position: fixed; z-index: 100; pointer-events: none; display: none;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 9px;
+  box-shadow: var(--shadow); padding: 9px 12px; font-size: 12.5px; max-width: 270px;
+}
+#tip b { display: block; font-size: 13.5px; margin-bottom: 2px; }
+#tip .o { color: var(--ink-2); font-size: 12px; margin-top: 3px; }
+
+.placelist { max-height: 560px; overflow-y: auto; }
+.placelist button {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  width: 100%; text-align: left; font: inherit; font-size: 13.5px;
+  padding: 8px 12px; border: 0; border-bottom: 1px solid var(--line-2);
+  background: none; color: inherit; cursor: pointer;
+}
+.placelist button:hover { background: var(--line-2); }
+.placelist button.sel { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+/* --ink-2, not --ink-3: this sits on the tinted background of a selected row,
+   where the lighter token drops under 4.5:1 */
+.placelist .c { color: var(--ink-2); font-variant-numeric: tabular-nums; font-size: 12.5px; }
+
+.winner-card { border-bottom: 1px solid var(--line-2); padding: 14px 20px; }
+.winner-card:last-child { border-bottom: 0; }
+.winner-card .row1 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.winner-card .amt {
+  font-size: 19px; font-weight: 700; letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+}
+.winner-card .where { color: var(--ink-2); font-size: 13px; margin-top: 5px; }
+.winner-card .where em { font-style: normal; color: var(--ink); }
+
+/* ==========================================================================
+   Misc
+   ========================================================================== */
+.empty { color: var(--ink-3); padding: 26px 20px; text-align: center; font-size: 13.5px; }
+
+details.note { margin-top: 10px; }
+details.note summary { cursor: pointer; color: var(--ink-2); font-size: 13px; }
+details.note > div { margin-top: 8px; color: var(--ink-2); font-size: 13px; max-width: 84ch; }
+
+.finding { padding: 12px 0; border-bottom: 1px solid var(--line-2); }
+.finding:last-child { border-bottom: 0; }
+.finding .row1 { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.finding .detail { margin-top: 5px; max-width: 94ch; }
+
+/* small layout helpers, so templates carry no inline styles */
+.stats-lead { margin-bottom: 22px; }
+.lede { margin: -6px 0 12px; }
+.panel-note { padding: 0 20px 14px; margin: 0; }
+.panel-title { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.panel-title h2 { margin: 0; }
+.axis { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; }
+.axis span:nth-child(2) { text-align: center; }
+.axis span:last-child { text-align: right; }
+.notelist { padding-left: 18px; margin: 6px 0; }
+.push-right { margin-left: auto; }
+.maplegend { margin-top: 8px; }
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+@media (max-width: 900px) {
+  .maplayout { grid-template-columns: 1fr; }
+  .placelist { max-height: 320px; }
+}
+
+@media (max-width: 760px) {
+  body { font-size: 14.5px; }
+  main { padding: 20px 14px 48px; }
+  footer { padding: 0 14px 32px; }
+  .top { gap: 10px; padding: 8px 14px; flex-wrap: wrap; }
+  .top nav { width: 100%; margin-left: 0; order: 3; overflow-x: auto; }
+  .theme { margin-left: auto; }
+  .panel { padding: 16px 14px; }
+  .panel-head { padding: 14px 14px 10px; }
+  .pager, .winner-card, .empty { padding-left: 14px; padding-right: 14px; }
+  h1 { font-size: 22px; }
+  .controls { width: 100%; margin-left: 0; }
+  .controls input[type=search] { flex: 1 1 160px; }
+  /* 36 bars will not fit a phone: let the chart scroll rather than squash */
+  .freq .col { min-width: 20px; }
+}
+
+@media print {
+  .top, .theme, .controls, .pager, footer { display: none; }
+  .panel { break-inside: avoid; box-shadow: none; }
+}

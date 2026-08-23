@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% from "_macros.html" import balls, verdict_pill, finding_block %}
+{% block body %}
+
+<h1>NLCB draw archive</h1>
+<p class="sub">
+  Every published Trinidad &amp; Tobago lottery draw that could be recovered, from two
+  independent sources, with a statistical battery looking for anything that does not
+  behave like a fair draw.
+</p>
+
+{% if run_ts %}
+<div class="verdict {{ 'clean' if not sig else 'flag' }}">
+  <span class="dot"></span>
+  <div>
+    {% if not sig %}
+      <h2>Draws look fair</h2>
+      <p>
+        {{ n_tested }} tests ran on the archive and none survives correction for
+        multiple testing. At a 5% threshold you would expect about
+        {{ (0.05 * n_tested) | round | int }} to look significant by chance alone even
+        if every draw were perfectly fair, so raw p-values are not enough — the bar
+        here is a Benjamini–Hochberg q-value below 0.05.
+      </p>
+    {% else %}
+      <h2>{{ sig|length }} finding{{ '' if sig|length == 1 else 's' }} survive{{ 's' if sig|length == 1 }} correction</h2>
+      <p>
+        Out of {{ n_tested }} tests. Most concern data integrity rather than the draws
+        themselves — see <a href="{{ url_for('findings') }}">Fairness</a> for what each one means.
+      </p>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<div class="stats stats-lead">
+  <div class="stat">
+    <div class="k">Draw records</div>
+    <div class="v">{{ '{:,}'.format(totals.rows) }}</div>
+    <div class="n">across {{ totals.g }} games</div>
+  </div>
+  <div class="stat">
+    <div class="k">Earliest draw</div>
+    <div class="v">{{ span.d0[:4] if span.d0 else '—' }}</div>
+    <div class="n">{{ span.d0 or '' }}</div>
+  </div>
+  <div class="stat">
+    <div class="k">Latest draw</div>
+    <div class="v">{{ span.d1[:4] if span.d1 else '—' }}</div>
+    <div class="n">{{ span.d1 or '' }}</div>
+  </div>
+  <div class="stat">
+    <div class="k">Winner announcements</div>
+    <div class="v">{{ wins.n or 0 }}</div>
+    <div class="n">{{ wins.amt | compactmoney }} published</div>
+  </div>
+</div>
+
+<div class="panel tight">
+  <div class="panel-head"><h2>Games</h2></div>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Game</th><th>Format</th><th class="num">Draws</th>
+          <th>First</th><th>Last</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for g in games %}
+        <tr>
+          <td><a href="{{ url_for('game', code=g.code) }}"><b>{{ g.name }}</b></a></td>
+          <td class="muted tiny">
+            {{ g.picks }} × {{ g.pool_min }}–{{ g.pool_max }}
+            {%- if g.bonus_name %} + {{ g.bonus_name }}{% endif %}
+            {%- if g.ordered %} · ordered{% endif %}
+          </td>
+          <td class="num">{{ '{:,}'.format(g.n) }}</td>
+          <td class="mono">{{ g.d0 or '—' }}</td>
+          <td class="mono">{{ g.d1 or '—' }}</td>
+          <td><a class="btn" href="{{ url_for('game', code=g.code) }}">Open</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="panel tight">
+  <div class="panel-head"><h2>Latest draws</h2>
+    <span class="muted tiny">Fast Cash omitted — it draws every few minutes</span>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Game</th><th>Date</th><th class="num">Draw</th><th>Numbers</th><th class="num">Jackpot</th></tr></thead>
+      <tbody>
+      {% for r in recent %}
+        <tr>
+          <td><a href="{{ url_for('game', code=r.game) }}">{{ r.game }}</a></td>
+          <td class="mono">{{ r.draw_date }}</td>
+          <td class="num">{{ r.draw_number }}</td>
+          <td>{{ balls(r.numbers, r.bonus_number) }}</td>
+          <td class="num">{{ r.jackpot_cents | compactmoney }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
