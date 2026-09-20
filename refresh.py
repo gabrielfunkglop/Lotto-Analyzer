@@ -1,12 +1,15 @@
 #!/usr/bin/env python
-"""Daily refresh: pull what is new, then re-run the analysis.
+"""Daily refresh: pull what is new.
 
 Deliberately small. It fetches only the most recent pages from the official API
 and only the current and previous month from the archive mirror, so it costs
 around 40 requests instead of the 1,500 a full backfill needs.
 
-    python refresh.py                 # normal daily run
-    python refresh.py --no-analyze    # ingest only
+Ingest only by default - the analysis battery takes minutes and does not need to
+run every day, so it is opt-in:
+
+    python refresh.py                 # normal daily run, fetch only
+    python refresh.py --analyze       # fetch, then re-run analyze.py
 
 Install as a daily scheduled task with `python refresh.py --install-task`.
 """
@@ -125,7 +128,10 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--games", default="lotto,playwhe,pick2,pick4,cashpot,winforlife,fastcash")
-    ap.add_argument("--no-analyze", action="store_true")
+    ap.add_argument("--analyze", action="store_true",
+                    help="re-run analyze.py after ingesting (off by default)")
+    ap.add_argument("--no-analyze", action="store_true",
+                    help=argparse.SUPPRESS)      # accepted for older callers; now the default
     ap.add_argument("--no-archive", action="store_true",
                     help="skip the mirror (it is slow and rate-limited)")
     ap.add_argument("--sims", type=int, default=3000)
@@ -161,11 +167,13 @@ def main(argv=None):
         except Exception:                                 # noqa: BLE001
             log.exception("archive refresh failed")
 
-    if not args.no_analyze:
+    if args.analyze:
         log.info("running analysis")
         r = subprocess.run([sys.executable, "-u", "analyze.py", "--sims", str(args.sims)],
                            cwd=str(ROOT))
         log.info("analysis exited rc=%s", r.returncode)
+    else:
+        log.info("skipping analysis (pass --analyze to run it)")
     log.info("=== refresh done ===")
     return 0
 

@@ -80,8 +80,11 @@ python scrape.py nlcbgames --games fastcash --windowed --since 2026-02-01 --wind
 python refresh.py
 ```
 
-Pulls only the newest pages plus the last two months from the mirror (~40 requests),
-then re-runs the analysis. Install it as a Windows scheduled task with:
+Pulls only the newest pages plus the last two months from the mirror (~40 requests).
+It stops there: the analysis battery is minutes of Monte-Carlo work that does not
+need to happen every day, so run `python analyze.py` when you want fresh findings,
+or `python refresh.py --analyze` to chain both. Install the daily fetch as a
+Windows scheduled task with:
 
 ```bash
 python refresh.py --install-task --task-time 09:30
@@ -173,7 +176,7 @@ lotto/
   analysis/suite.py     the test battery
 scrape.py               ingest CLI
 supervise.py            restartable driver for the long backfill
-refresh.py              daily incremental update + re-analysis
+refresh.py              daily incremental update (fetch only; --analyze to chain)
 analyze.py              run the battery, write reports/report.md
 serve.py                the web app
 templates/ static/      web UI

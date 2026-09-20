@@ -31,7 +31,7 @@ see §6. Nothing else holds state.
 | `lotto/analysis/suite.py` | The test battery. Every test takes `(game, draws, meta)` and returns `Result` objects. |
 | `scrape.py` | Ingest CLI. |
 | `supervise.py` | Restartable driver for the multi-hour backfill. |
-| `refresh.py` | Daily incremental update, installed as a scheduled task. |
+| `refresh.py` | Daily incremental fetch, installed as a scheduled task. Analysis is opt-in (`--analyze`). |
 | `analyze.py` | Runs the battery, applies FDR, writes `reports/report.md` and the `findings` table. |
 | `serve.py` | Flask app. Read-only — it opens SQLite with `mode=ro`. |
 | `templates/`, `static/` | Web UI. `_macros.html` holds shared fragments. |
